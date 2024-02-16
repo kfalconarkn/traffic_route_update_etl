@@ -35,7 +35,4 @@ async def upload_traffic_events():
         print(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to upload data: {str(e)}")
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="localhost", port=8000)
 
