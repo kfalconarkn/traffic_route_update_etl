@@ -63,12 +63,13 @@ def convert_to_df(response):
     df = pd.DataFrame(data)
     print("DataFrame created")
 
-    # Convert time columns with timezone adjustments
+    # Convert time columns with timezone adjustments but exclude microseconds in the final string
     df['duration_start'] = pd.to_datetime(df['duration_start'], utc=True).dt.tz_convert('Australia/Brisbane')
-    df['duration_start'] = df['duration_start'].dt.strftime('%Y-%m-%d %H:%M:%S')
-    
+    df['duration_start'] = df['duration_start'].dt.strftime('%Y-%m-%d %H:%M:%S')  # Converts to string without microseconds
+
     df['last_updated'] = pd.to_datetime(df['last_updated'], utc=True).dt.tz_convert('Australia/Brisbane')
-    df['last_updated'] = df['last_updated'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    df['last_updated'] = df['last_updated'].dt.strftime('%Y-%m-%d %H:%M:%S')  # Converts to string without microseconds
+
 
     # Filter out other regions
     filter_df = df[df['local_government_area'].isin(['Gold Coast City', 'Sunshine Coast Regional', 'Noosa Shire'])]
