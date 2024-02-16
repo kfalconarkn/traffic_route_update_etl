@@ -63,11 +63,15 @@ def convert_to_df(response):
     df = pd.DataFrame(data)
     print("DataFrame created")
 
-    # Parse datetime columns, automatically handling ISO 8601 formats, including microseconds and timezone
-    df['duration_start'] = pd.to_datetime(df['duration_start'], utc=True).dt.tz_convert('Australia/Brisbane')
-    df['last_updated'] = pd.to_datetime(df['last_updated'], utc=True).dt.tz_convert('Australia/Brisbane')
+    # Parse the datetime columns directly without specifying a format
+    df['duration_start'] = pd.to_datetime(df['duration_start'], utc=True)
+    df['last_updated'] = pd.to_datetime(df['last_updated'], utc=True)
 
-    # Convert parsed datetime objects to strings in the desired format, excluding microseconds
+    # Convert to the desired timezone
+    df['duration_start'] = df['duration_start'].dt.tz_convert('Australia/Brisbane')
+    df['last_updated'] = df['last_updated'].dt.tz_convert('Australia/Brisbane')
+
+    # Now, format these datetime columns as strings in the format YYYY-MM-DD HH:MM:SS
     df['duration_start'] = df['duration_start'].dt.strftime('%Y-%m-%d %H:%M:%S')
     df['last_updated'] = df['last_updated'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
