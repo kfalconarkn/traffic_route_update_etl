@@ -115,7 +115,7 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
     for supabase_id, item in id_lookup.items():
         if supabase_id not in df_ids:
             # If the ID exists in Supabase but not in dataframe, update the 'resolved' column
-            resolved_date = datetime.now().strftime('%Y-%m-%d')  # Today's date in YYYY-MM-DD format
+            resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Today's date in YYYY-MM-DD HH:MM:SS format
             update_data = {'resolved': resolved_date}  # Data to update
             update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{supabase_id}"
             print(f"Updating 'resolved' for ID {supabase_id} at endpoint: {update_endpoint}")
@@ -123,7 +123,7 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
             if update_response.status_code != 200:
                 print(f"Error updating 'resolved' for ID {supabase_id}: {update_response.text}")
             else:
-                print(f"Successfully updated 'resolved' for ID {supabase_id}.")
+                print(f"Successfully updated 'resolved' for ID {supabase_id}. resolved: {resolved_date}")
 
     # Iterate through rows in the DataFrame for insertion or update record
     for item in data:
