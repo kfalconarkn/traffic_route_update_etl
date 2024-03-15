@@ -113,8 +113,9 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
 
     # Iterate through existing IDs in Supabase
     for supabase_id, item in id_lookup.items():
-        if supabase_id not in df_ids:
-            # If the ID exists in Supabase but not in dataframe, update the 'resolved' column
+        # Check if the ID is not in the DataFrame's ID set and if the 'resolved' value is empty or null
+        if supabase_id not in df_ids and (not item.get('resolved') or item.get('resolved').strip() == ''):
+            # If the conditions are met, update the 'resolved' column with the current date and time
             resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Today's date in YYYY-MM-DD HH:MM:SS format
             update_data = {'resolved': resolved_date}  # Data to update
             update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{supabase_id}"
