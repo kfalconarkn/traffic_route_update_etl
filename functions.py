@@ -64,8 +64,9 @@ def convert_to_df(response):
     print("DataFrame created")
 
     # Parse the datetime columns directly without specifying a format
-    df['duration_start'] = pd.to_datetime(df['duration_start'], utc=True)
-    df['last_updated'] = pd.to_datetime(df['last_updated'], utc=True)
+     # Convert to datetime without specifying the format, allowing pandas to infer it
+    df['duration_start'] = pd.to_datetime(df['duration_start'], utc=True, errors='coerce')
+    df['last_updated'] = pd.to_datetime(df['last_updated'], utc=True, errors='coerce')
 
     # Convert to the desired timezone
     df['duration_start'] = df['duration_start'].dt.tz_convert('Australia/Brisbane')
