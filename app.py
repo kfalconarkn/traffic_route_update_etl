@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException
 import os
+import time
+import logging
 from functions import get_traffic_events, convert_to_df, upload_to_db
 from dotenv import load_dotenv
 
-app = FastAPI()
-
+# Load environment variables
 load_dotenv()
 
 supabase_url = os.getenv('supabase_url')
@@ -12,27 +12,35 @@ supabase_key = os.getenv('supabase_key')
 table_name = os.getenv('table_name')
 api_key = os.getenv('api_key')
 
-@app.post("/upload-traffic-events")
-async def upload_traffic_events():
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def upload_traffic_events():
     try:
-        print("Starting API call...")
+        logger.info("Starting API call...")
         # Make API call
         data = get_traffic_events(api_key)
-        print("API call completed")
+        logger.info("API call completed")
         
-        print("Converting data to DataFrame...")
+        logger.info("Converting data to DataFrame...")
         # Convert JSON to DataFrame
         df = convert_to_df(data)
-        print("Data conversion complete")
+        logger.info("Data conversion complete")
         
-        print("Uploading data to database...")
+        logger.info("Uploading data to database...")
         # Upload to database
         upload_to_db(df, table_name, supabase_key, supabase_url)
-        print('Data upload complete')
-
-        return {"message": "Data uploaded successfully"}
+        logger.info('Data upload complete')
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload data: {str(e)}")
+        logger.error(f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    while True:
+        upload_traffic_events()
+        logger.info("Waiting for the next 15 minutes")
+        time.sleep(15 * 60)  # Sleep for 15 minutes
+
+
 
 
