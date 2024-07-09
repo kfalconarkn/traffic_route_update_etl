@@ -4,6 +4,11 @@ import json
 import pytz
 from datetime import datetime
 import os
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 ## API CALL
 def get_traffic_events(api_key):
@@ -14,10 +19,10 @@ def get_traffic_events(api_key):
         response = requests.get(url, params=params)
         response.raise_for_status()  
     except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
+        logger.error(f"HTTP error occurred: {http_err}")
         return None
     except requests.exceptions.RequestException as req_err:
-        print(f"Request error occurred: {req_err}")
+        logger.error(f"Request error occurred: {req_err}")
         return None
     
     data = response.json()
@@ -61,7 +66,6 @@ def convert_to_df(response):
         }
         data.append(row)
     df = pd.DataFrame(data)
-    print("DataFrame created")
 
     # Parse the datetime columns directly without specifying a format
      # Convert to datetime without specifying the format, allowing pandas to infer it
@@ -79,7 +83,7 @@ def convert_to_df(response):
 
     # Filter out other regions
     filter_df = df[df['local_government_area'].isin(['Gold Coast City', 'Sunshine Coast Regional', 'Noosa Shire'])]
-    print("Filtered DataFrame for specific Local Government Areas")
+    logger.info(f"Number activate traffic events on network {len(filter_df)}")
     return filter_df
 
 
@@ -96,21 +100,17 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
 
     # Convert DataFrame to JSON format
     data = df.to_dict(orient='records')
-    print("Converted DataFrame to JSON.")
 
     # Construct the API endpoint
     endpoint = f"{supabase_url}/rest/v1/{table_name}"
-    print(f"Constructed endpoint: {endpoint}")
 
     # Get existing IDs from Supabase table
     response = requests.get(endpoint, headers=headers)
     existing_data = response.json()
-    print("Fetched existing data from Supabase.")
 
     # Create a dictionary to store IDs as keys for fast lookup
     id_lookup = {item['ID']: item for item in existing_data}
     df_ids = set(df['ID'].tolist())  # Convert dataframe IDs to a set for fast lookup
-    print("Created ID lookup dictionary.")
 
     # Iterate through existing IDs in Supabase
     for supabase_id, item in id_lookup.items():
@@ -120,12 +120,12 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
             resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Today's date in YYYY-MM-DD HH:MM:SS format
             update_data = {'resolved': resolved_date}  # Data to update
             update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{supabase_id}"
-            print(f"Updating 'resolved' for ID {supabase_id} at endpoint: {update_endpoint}")
+            logger.info(f"Updating 'resolved' for ID {supabase_id}")
             update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps(update_data))
             if update_response.status_code != 200:
-                print(f"Error updating 'resolved' for ID {supabase_id}: {update_response.text}")
+                logger.error(f"Error updating 'resolved' for ID {supabase_id}: {update_response.text}")
             else:
-                print(f"Successfully updated 'resolved' for ID {supabase_id}. resolved: {resolved_date}")
+                logger.info(f"Successfully updated 'resolved' for ID {supabase_id}. resolved: {resolved_date}")
 
     # Iterate through rows in the DataFrame for insertion or update record
     for item in data:
@@ -136,19 +136,17 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
             print(f"Updating data with ID {item_id} at endpoint: {update_endpoint}")
             update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps([item]))
             if update_response.status_code != 200:
-                print(f"Error updating data with ID {item_id}: {update_response.text}")
+                logger.error(f"Error updating db with ID {item_id}: {update_response.text}")
             else:
-                print(f"Successfully updated data with ID {item_id}.")
+                logger.info(f"Successfully updated db with ID {item_id}.")
         else:
             # If the ID is new, append the row to the database
             print(f"Inserting new data with ID {item_id} at endpoint: {endpoint}")
             response = requests.post(endpoint, headers=headers, data=json.dumps([item]))
             if response.status_code != 201:
-                print(f"Error inserting data with ID {item_id}: {response.text}")
+                logger.error(f"Error inserting data with ID {item_id}: {response.text}")
             else:
-                print(f"Successfully inserted data with ID {item_id}.")
-
-    print("Data upload complete.")
+                logger.info(f"Successfully inserted data with ID {item_id}.")
 
 
 
