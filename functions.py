@@ -90,27 +90,28 @@ def convert_to_df(response):
 ## UPLOAD TO SUPABASE
 
 def upload_to_db(df, table_name, supabase_key, supabase_url):
-    # Headers for the request
     headers = {
         'apikey': supabase_key,
         'Authorization': f'Bearer {supabase_key}',
         'Content-Type': 'application/json',
-        'Prefer': 'return=representation'  # Asks the API to return the inserted data
+        'Prefer': 'return=representation'
     }
 
-    # Convert DataFrame to JSON format
     data = df.to_dict(orient='records')
-
-    # Construct the API endpoint
     endpoint = f"{supabase_url}/rest/v1/{table_name}"
 
     # Get existing IDs from Supabase table
     response = requests.get(endpoint, headers=headers)
     existing_data = response.json()
 
+    # Ensure existing_data is a list of dictionaries
+    if not isinstance(existing_data, list):
+        logger.error(f"Unexpected response format: {existing_data}")
+        return
+
     # Create a dictionary to store IDs as keys for fast lookup
-    id_lookup = {item['ID']: item for item in existing_data}
-    df_ids = set(df['ID'].tolist())  # Convert dataframe IDs to a set for fast lookup
+    id_lookup = {str(item.get('ID')): item for item in existing_data if item.get('ID')}
+    df_ids = set(df['ID'].astype(str).tolist())
 
     # Iterate through existing IDs in Supabase
     for supabase_id, item in id_lookup.items():
@@ -147,7 +148,4 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
                 logger.error(f"Error inserting data with ID {item_id}: {response.text}")
             else:
                 logger.info(f"Successfully inserted data with ID {item_id}.")
-
-
-
 
