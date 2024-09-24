@@ -131,24 +131,32 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
 
         # Iterate through rows in the DataFrame for insertion or update record
         for item in data:
-            item_id = item['ID']
-            if item_id in id_lookup:
-                # If the ID exists, update the corresponding row
-                update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
-                print(f"Updating data with ID {item_id} at endpoint: {update_endpoint}")
-                update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps([item]))
-                if update_response.status_code != 200:
-                    logger.error(f"Error updating db with ID {item_id}: {update_response.text}")
-                else:
+            item_id = str(item['ID'])  # Ensure item_id is a string
+            try:
+                # Check if the ID exists in the database
+                check_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
+                check_response = requests.get(check_endpoint, headers=headers)
+                check_response.raise_for_status()
+                existing_item = check_response.json()
+
+                if existing_item:
+                    # If the ID exists, update the corresponding row
+                    update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
+                    logger.info(f"Updating data with ID {item_id}")
+                    update_response = requests.patch(update_endpoint, headers=headers, json=item)
+                    update_response.raise_for_status()
                     logger.info(f"Successfully updated db with ID {item_id}.")
-            else:
-                # If the ID is new, append the row to the database
-                print(f"Inserting new data with ID {item_id} at endpoint: {endpoint}")
-                response = requests.post(endpoint, headers=headers, data=json.dumps([item]))
-                if response.status_code != 201:
-                    logger.error(f"Error inserting data with ID {item_id}: {response.text}")
                 else:
+                    # If the ID is new, append the row to the database
+                    logger.info(f"Inserting new data with ID {item_id}")
+                    insert_response = requests.post(endpoint, headers=headers, json=item)
+                    insert_response.raise_for_status()
                     logger.info(f"Successfully inserted data with ID {item_id}.")
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error processing item with ID {item_id}: {str(e)}")
+                if 'response' in locals():
+                    logger.error(f"Response content: {response.text}")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error fetching existing data: {e}")
