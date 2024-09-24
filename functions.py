@@ -101,51 +101,57 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
     endpoint = f"{supabase_url}/rest/v1/{table_name}"
 
     # Get existing IDs from Supabase table
-    response = requests.get(endpoint, headers=headers)
-    existing_data = response.json()
+    try:
+        response = requests.get(endpoint, headers=headers)
+        response.raise_for_status()  # This will raise an HTTPError for bad responses
+        existing_data = response.json()
 
-    # Ensure existing_data is a list of dictionaries
-    if not isinstance(existing_data, list):
-        logger.error(f"Unexpected response format: {existing_data}")
+        if not isinstance(existing_data, list):
+            logger.error(f"Unexpected response format: {existing_data}")
+            return
+
+        # Create a dictionary to store IDs as keys for fast lookup
+        id_lookup = {str(item.get('ID')): item for item in existing_data if item.get('ID')}
+        df_ids = set(df['ID'].astype(str).tolist())
+
+        # Iterate through existing IDs in Supabase
+        for supabase_id, item in id_lookup.items():
+            # Check if the ID is not in the DataFrame's ID set and if the 'resolved' value is empty or null
+            if supabase_id not in df_ids and (not item.get('resolved') or item.get('resolved').strip() == ''):
+                # If the conditions are met, update the 'resolved' column with the current date and time
+                resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Today's date in YYYY-MM-DD HH:MM:SS format
+                update_data = {'resolved': resolved_date}  # Data to update
+                update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{supabase_id}"
+                logger.info(f"Updating 'resolved' for ID {supabase_id}")
+                update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps(update_data))
+                if update_response.status_code != 200:
+                    logger.error(f"Error updating 'resolved' for ID {supabase_id}: {update_response.text}")
+                else:
+                    logger.info(f"Successfully updated 'resolved' for ID {supabase_id}. resolved: {resolved_date}")
+
+        # Iterate through rows in the DataFrame for insertion or update record
+        for item in data:
+            item_id = item['ID']
+            if item_id in id_lookup:
+                # If the ID exists, update the corresponding row
+                update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
+                print(f"Updating data with ID {item_id} at endpoint: {update_endpoint}")
+                update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps([item]))
+                if update_response.status_code != 200:
+                    logger.error(f"Error updating db with ID {item_id}: {update_response.text}")
+                else:
+                    logger.info(f"Successfully updated db with ID {item_id}.")
+            else:
+                # If the ID is new, append the row to the database
+                print(f"Inserting new data with ID {item_id} at endpoint: {endpoint}")
+                response = requests.post(endpoint, headers=headers, data=json.dumps([item]))
+                if response.status_code != 201:
+                    logger.error(f"Error inserting data with ID {item_id}: {response.text}")
+                else:
+                    logger.info(f"Successfully inserted data with ID {item_id}.")
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching existing data: {e}")
+        logger.error(f"Response content: {response.text}")
         return
-
-    # Create a dictionary to store IDs as keys for fast lookup
-    id_lookup = {str(item.get('ID')): item for item in existing_data if item.get('ID')}
-    df_ids = set(df['ID'].astype(str).tolist())
-
-    # Iterate through existing IDs in Supabase
-    for supabase_id, item in id_lookup.items():
-        # Check if the ID is not in the DataFrame's ID set and if the 'resolved' value is empty or null
-        if supabase_id not in df_ids and (not item.get('resolved') or item.get('resolved').strip() == ''):
-            # If the conditions are met, update the 'resolved' column with the current date and time
-            resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Today's date in YYYY-MM-DD HH:MM:SS format
-            update_data = {'resolved': resolved_date}  # Data to update
-            update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{supabase_id}"
-            logger.info(f"Updating 'resolved' for ID {supabase_id}")
-            update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps(update_data))
-            if update_response.status_code != 200:
-                logger.error(f"Error updating 'resolved' for ID {supabase_id}: {update_response.text}")
-            else:
-                logger.info(f"Successfully updated 'resolved' for ID {supabase_id}. resolved: {resolved_date}")
-
-    # Iterate through rows in the DataFrame for insertion or update record
-    for item in data:
-        item_id = item['ID']
-        if item_id in id_lookup:
-            # If the ID exists, update the corresponding row
-            update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
-            print(f"Updating data with ID {item_id} at endpoint: {update_endpoint}")
-            update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps([item]))
-            if update_response.status_code != 200:
-                logger.error(f"Error updating db with ID {item_id}: {update_response.text}")
-            else:
-                logger.info(f"Successfully updated db with ID {item_id}.")
-        else:
-            # If the ID is new, append the row to the database
-            print(f"Inserting new data with ID {item_id} at endpoint: {endpoint}")
-            response = requests.post(endpoint, headers=headers, data=json.dumps([item]))
-            if response.status_code != 201:
-                logger.error(f"Error inserting data with ID {item_id}: {response.text}")
-            else:
-                logger.info(f"Successfully inserted data with ID {item_id}.")
 
