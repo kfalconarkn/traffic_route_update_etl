@@ -96,10 +96,10 @@ def upload_traffic_events():
         logger.error(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
-    while True:
-        upload_traffic_events()
-        logger.info("Waiting for the next 5 minutes")
-        time.sleep(5 * 60)  # Sleep for 5 minutes
+    # Single execution for GitHub Actions (triggered by Google Cloud Scheduler)
+    logger.info("Starting traffic monitoring single execution...")
+    upload_traffic_events()
+    logger.info("Traffic monitoring execution completed successfully")
 
 
 

@@ -1,0 +1,74 @@
+name: Traffic Monitoring & Route Analysis
+
+on:
+  # Triggered by Google Cloud Scheduler via repository dispatch
+  repository_dispatch:
+    types: [traffic-monitoring-trigger]
+  
+  # Manual trigger for testing
+  workflow_dispatch:
+  
+  # Fallback schedule (every 5 minutes) - remove this if using only Google Cloud Scheduler
+  # schedule:
+  #   - cron: '*/5 * * * *'
+
+jobs:
+  monitor-traffic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+      with:
+        version: "latest"
+        enable-cache: true
+        
+    - name: Install dependencies
+      run: uv sync
+      
+    - name: Create data directory
+      run: mkdir -p data
+      
+    - name: Verify route data exists
+      run: |
+        if [ ! -f "data/route_data.json" ]; then
+          echo "Warning: route_data.json not found. Route analysis will be skipped."
+          echo "Please ensure your route data is properly stored or accessible."
+        fi
+      
+    - name: Run traffic monitoring
+      env:
+        supabase_url: ${{ secrets.SUPABASE_URL }}
+        supabase_key: ${{ secrets.SUPABASE_KEY }}
+        table_name: ${{ secrets.TABLE_NAME }}
+        api_key: ${{ secrets.QLD_TRAFFIC_API_KEY }}
+        geocode_api_key: ${{ secrets.LOCATIONIQ_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
+      run: |
+        echo "Starting traffic monitoring execution..."
+        uv run python app.py
+        
+    - name: Handle execution results
+      if: always()
+      run: |
+        if [ $? -eq 0 ]; then
+          echo "✅ Traffic monitoring completed successfully"
+        else
+          echo "❌ Traffic monitoring failed"
+          exit 1
+        fi
+        
+    - name: Log completion
+      run: |
+        echo "Traffic monitoring job completed at $(date -u)"
+        echo "Next execution will be triggered by Google Cloud Scheduler in 5 minutes"
