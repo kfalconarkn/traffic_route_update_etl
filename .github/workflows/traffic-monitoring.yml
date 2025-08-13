@@ -47,11 +47,11 @@ jobs:
       
     - name: Run traffic monitoring
       env:
-        supabase_url: ${{ secrets.SUPABASE_URL }}
-        supabase_key: ${{ secrets.SUPABASE_KEY }}
-        table_name: ${{ secrets.TABLE_NAME }}
-        api_key: ${{ secrets.API_KEY }}
-        geocode_api_key: ${{ secrets.GEOCODE_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        TABLE_NAME: ${{ secrets.TABLE_NAME }}
+        API_KEY: ${{ secrets.API_KEY }}
+        GEOCODE_API_KEY: ${{ secrets.GEOCODE_API_KEY }}
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
       run: |

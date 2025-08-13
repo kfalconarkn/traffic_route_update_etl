@@ -121,8 +121,8 @@ In your GitHub repository, go to Settings → Secrets and variables → Actions,
 ```
 SUPABASE_URL: your_supabase_project_url
 SUPABASE_KEY: your_supabase_anon_key
-QLD_TRAFFIC_API_KEY: your_queensland_traffic_api_key
-LOCATIONIQ_API_KEY: your_locationiq_geocoding_key
+API_KEY: your_queensland_traffic_api_key
+GEOCODE_API_KEY: your_locationiq_geocoding_key
 GROQ_API_KEY: your_groq_ai_api_key
 TABLE_NAME: traffic_events (or your preferred table name)
 ```

@@ -59,11 +59,11 @@ def check_environment():
     print("🔍 Checking environment variables...")
     
     required_vars = [
-        'supabase_url',
-        'supabase_key', 
-        'table_name',
-        'api_key',
-        'geocode_api_key',
+        'SUPABASE_URL',
+        'SUPABASE_KEY', 
+        'TABLE_NAME',
+        'API_KEY',
+        'GEOCODE_API_KEY',
         'GROQ_API_KEY'
     ]
     
