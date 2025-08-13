@@ -10,11 +10,11 @@ from loguru import logger
 # Load environment variables
 load_dotenv()
 
-supabase_url = os.getenv('supabase_url')
-supabase_key = os.getenv('supabase_key')
-table_name = os.getenv('table_name') or 'traffic_events'
-api_key = os.getenv('api_key')
-geocode_api_key = os.getenv('geocode_api_key')
+supabase_url = os.getenv('SUPABASE_URL')
+supabase_key = os.getenv('SUPABASE_KEY')
+table_name = os.getenv('TABLE_NAME') or 'traffic_events'
+api_key = os.getenv('API_KEY')
+geocode_api_key = os.getenv('GEOCODE_API_KEY')
 
 # Configure Loguru logger
 logger.remove()  # Remove default handler
