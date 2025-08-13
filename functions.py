@@ -1,14 +1,14 @@
 import requests
 import pandas as pd
-import json
-import pytz
 from datetime import datetime
+from supabase import create_client, Client
+from loguru import logger
+import sys
 import os
-import logging
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Configure Loguru logger
+logger.remove()  # Remove default handler
+logger.add(sys.stderr, level=os.getenv("LOG_LEVEL", "INFO"), enqueue=True, backtrace=False, diagnose=False)
 
 ## API CALL
 def get_traffic_events(api_key):
@@ -90,76 +90,65 @@ def convert_to_df(response):
 ## UPLOAD TO SUPABASE
 
 def upload_to_db(df, table_name, supabase_key, supabase_url):
-    headers = {
-        'apikey': supabase_key,
-        'Authorization': f'Bearer {supabase_key}',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation'
-    }
+    """Upload DataFrame rows to Supabase using upsert on the ID column.
 
-    data = df.to_dict(orient='records')
-    endpoint = f"{supabase_url}/rest/v1/{table_name}"
+    Also marks any previously-unresolved rows as resolved when their ID is
+    no longer present in the latest DataFrame.
+    """
 
-    # Get existing IDs from Supabase table
+    supabase: Client = create_client(supabase_url, supabase_key)
+
+    # Convert DataFrame to list of dicts for JSON upsert
+    records = df.to_dict(orient='records')
+
+    # Fetch existing IDs and resolved state to determine which should be marked resolved
     try:
-        response = requests.get(endpoint, headers=headers)
-        response.raise_for_status()  # This will raise an HTTPError for bad responses
-        existing_data = response.json()
+        select_resp = supabase.table(table_name).select("ID,resolved").execute()
+        existing_items = getattr(select_resp, "data", None)
+        if existing_items is None:
+            # Fallback if SDK returns a dict-like structure
+            existing_items = select_resp.get("data", []) if isinstance(select_resp, dict) else []
 
-        if not isinstance(existing_data, list):
-            logger.error(f"Unexpected response format: {existing_data}")
-            return
+        existing_lookup = {
+            str(item.get("ID")): item
+            for item in existing_items
+            if item.get("ID") is not None
+        }
+        df_ids = set(str(r["ID"]) for r in records if "ID" in r)
 
-        # Create a dictionary to store IDs as keys for fast lookup
-        id_lookup = {str(item.get('ID')): item for item in existing_data if item.get('ID')}
-        df_ids = set(df['ID'].astype(str).tolist())
-
-        # Iterate through existing IDs in Supabase
-        for supabase_id, item in id_lookup.items():
-            # Check if the ID is not in the DataFrame's ID set and if the 'resolved' value is empty or null
-            if supabase_id not in df_ids and (not item.get('resolved') or item.get('resolved').strip() == ''):
-                # If the conditions are met, update the 'resolved' column with the current date and time
-                resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Today's date in YYYY-MM-DD HH:MM:SS format
-                update_data = {'resolved': resolved_date}  # Data to update
-                update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{supabase_id}"
-                logger.info(f"Updating 'resolved' for ID {supabase_id}")
-                update_response = requests.patch(update_endpoint, headers=headers, data=json.dumps(update_data))
-                if update_response.status_code != 200:
-                    logger.error(f"Error updating 'resolved' for ID {supabase_id}: {update_response.text}")
-                else:
-                    logger.info(f"Successfully updated 'resolved' for ID {supabase_id}. resolved: {resolved_date}")
-
-        # Iterate through rows in the DataFrame for insertion or update record
-        for item in data:
-            item_id = str(item['ID'])  # Ensure item_id is a string
-            try:
-                # Check if the ID exists in the database
-                check_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
-                check_response = requests.get(check_endpoint, headers=headers)
-                check_response.raise_for_status()
-                existing_item = check_response.json()
-
-                if existing_item:
-                    # If the ID exists, update the corresponding row
-                    update_endpoint = f"{supabase_url}/rest/v1/{table_name}?ID=eq.{item_id}"
-                    logger.info(f"Updating data with ID {item_id}")
-                    update_response = requests.patch(update_endpoint, headers=headers, json=item)
-                    update_response.raise_for_status()
-                    logger.info(f"Successfully updated db with ID {item_id}.")
-                else:
-                    # If the ID is new, append the row to the database
-                    logger.info(f"Inserting new data with ID {item_id}")
-                    insert_response = requests.post(endpoint, headers=headers, json=item)
-                    insert_response.raise_for_status()
-                    logger.info(f"Successfully inserted data with ID {item_id}.")
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error processing item with ID {item_id}: {str(e)}")
-                if 'response' in locals():
-                    logger.error(f"Response content: {response.text}")
-
-    except requests.exceptions.RequestException as e:
+        ids_to_resolve = [
+            existing_id
+            for existing_id, item in existing_lookup.items()
+            if existing_id not in df_ids and (not item.get("resolved") or str(item.get("resolved")).strip() == "")
+        ]
+    except Exception as e:
         logger.error(f"Error fetching existing data: {e}")
-        logger.error(f"Response content: {response.text}")
+        existing_lookup = {}
+        ids_to_resolve = []
+
+    # Perform upsert in chunks to avoid large payloads
+    try:
+        chunk_size = 500
+        for start_index in range(0, len(records), chunk_size):
+            chunk = records[start_index : start_index + chunk_size]
+            if not chunk:
+                continue
+            logger.info(f"Upserting {len(chunk)} rows into {table_name}")
+            supabase.table(table_name).upsert(chunk, on_conflict="ID").execute()
+        logger.info("Upsert complete")
+    except Exception as e:
+        logger.error(f"Error during upsert: {e}")
         return
+
+    # Mark missing IDs as resolved (only those previously unresolved)
+    if ids_to_resolve:
+        try:
+            resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"Marking {len(ids_to_resolve)} rows as resolved")
+            supabase.table(table_name).update({"resolved": resolved_date}).in_("ID", ids_to_resolve).execute()
+            logger.info("Resolved update complete")
+        except Exception as e:
+            logger.error(f"Error updating resolved status: {e}")
+
+    return
 
