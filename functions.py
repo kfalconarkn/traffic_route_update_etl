@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 from datetime import datetime
+import pytz
 from supabase import create_client, Client
 from loguru import logger
 import sys
@@ -143,7 +144,9 @@ def upload_to_db(df, table_name, supabase_key, supabase_url):
     # Mark missing IDs as resolved (only those previously unresolved)
     if ids_to_resolve:
         try:
-            resolved_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Use Australia/Brisbane timezone for consistency with other datetime fields
+            brisbane_tz = pytz.timezone('Australia/Brisbane')
+            resolved_date = datetime.now(brisbane_tz).strftime('%Y-%m-%d %H:%M:%S')
             logger.info(f"Marking {len(ids_to_resolve)} rows as resolved")
             supabase.table(table_name).update({"resolved": resolved_date}).in_("ID", ids_to_resolve).execute()
             logger.info("Resolved update complete")
